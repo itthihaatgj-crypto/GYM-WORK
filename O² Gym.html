@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>إدارة الجيم الكاملة</title>
+<style>
+body { font-family: Arial; padding:20px; background:#f4f4f4; }
+h1,h2,h3 { text-align:center; }
+input,select,button { padding:8px; margin:5px; }
+table { width:100%; border-collapse:collapse; margin-top:15px; }
+th,td { border:1px solid #ccc; padding:8px; text-align:center; }
+th { background:#333; color:white; }
+.paid { background:#c8f7c5; }
+.unpaid { background:#f7c5c5; }
+.section { background:white; padding:15px; margin-top:20px; border-radius:10px; }
+</style>
+</head>
+<body>
+
+<h1>نظام إدارة الجيم</h1>
+
+<div class="section">
+<h2>اختر الشهر</h2>
+<select id="monthSelect" onchange="changeMonth()"></select>
+</div>
+
+<div class="section">
+<h2>إضافة مشترك</h2>
+<input type="text" id="name" placeholder="اسم المشترك">
+<input type="date" id="startDate">
+<input type="number" id="duration" placeholder="مدة بالأيام">
+<input type="number" id="amount" placeholder="المبلغ">
+<select id="status">
+<option value="مدفوع">مدفوع</option>
+<option value="متأخر">متأخر</option>
+</select>
+<button onclick="addMember()">إضافة</button>
+</div>
+
+<div class="section">
+<h2>المشتركين</h2>
+<input type="text" id="search" placeholder="بحث..." oninput="renderMembers()">
+<table>
+<thead>
+<tr>
+<th>الاسم</th>
+<th>التاريخ</th>
+<th>المدة</th>
+<th>المبلغ</th>
+<th>الحالة</th>
+<th>تعديل</th>
+<th>حذف</th>
+</tr>
+</thead>
+<tbody id="membersTable"></tbody>
+</table>
+
+<h3>إجمالي الاشتراكات: <span id="subTotal">0</span> جنيه</h3>
+<h3>عدد المشتركين: <span id="subCount">0</span></h3>
+<h3>مدفوع: <span id="paidCount">0</span> | متأخر: <span id="unpaidCount">0</span></h3>
+</div>
+
+<div class="section">
+<h2>الحصص اليومية</h2>
+<input type="number" id="dailyAmount" placeholder="مبلغ الحصة">
+<button onclick="addDaily()">إضافة حصة</button>
+
+<table>
+<thead>
+<tr>
+<th>التاريخ</th>
+<th>المبلغ</th>
+<th>حذف</th>
+</tr>
+</thead>
+<tbody id="dailyTable"></tbody>
+</table>
+
+<h3>إجمالي اليوم: <span id="todayTotal">0</span> جنيه</h3>
+<h3>إجمالي الشهر للحصص: <span id="monthDailyTotal">0</span> جنيه</h3>
+</div>
+
+<script>
+let currentMonth = new Date().toLocaleString('ar-EG',{month:'long',year:'numeric'});
+let membersData = [];
+let dailyData = [];
+
+const monthSelect = document.getElementById("monthSelect");
+
+function loadMonth(month){
+currentMonth = month;
+membersData = JSON.parse(localStorage.getItem(month+"_subs")) || [];
+dailyData = JSON.parse(localStorage.getItem(month+"_daily")) || [];
+renderMembers();
+renderDaily();
+}
+
+function populateMonths(){
+monthSelect.innerHTML="";
+let months=[];
+for(let i=0;i<localStorage.length;i++){
+let key=localStorage.key(i);
+if(key.includes("_subs")){
+months.push(key.replace("_subs",""));
+}
+}
+if(!months.includes(currentMonth)) months.push(currentMonth);
+months.sort((a,b)=>new Date(a)-new Date(b));
+months.forEach(m=>{
+let opt=document.createElement("option");
+opt.value=m;
+opt.innerText=m;
+if(m===currentMonth) opt.selected=true;
+monthSelect.appendChild(opt);
+});
+}
+
+function changeMonth(){
+loadMonth(monthSelect.value);
+}
+
+function addMember(){
+let name=nameInput.value;
+let date=startDate.value;
+let duration=durationInput.value;
+let amount=parseFloat(amountInput.value);
+let status=statusSelect.value;
+
+if(!name||!date||!duration||!amount){alert("املأ البيانات");return;}
+
+membersData.push({name,date,duration,amount,status});
+localStorage.setItem(currentMonth+"_subs",JSON.stringify(membersData));
+populateMonths();
+renderMembers();
+nameInput.value=""; startDate.value=""; durationInput.value=""; amountInput.value="";
+}
+
+const nameInput=document.getElementById("name");
+const startDate=document.getElementById("startDate");
+const durationInput=document.getElementById("duration");
+const amountInput=document.getElementById("amount");
+const statusSelect=document.getElementById("status");
+
+function renderMembers(){
+let search=document.getElementById("search").value.toLowerCase();
+let table=document.getElementById("membersTable");
+table.innerHTML="";
+let total=0,count=0,paid=0,unpaid=0;
+
+membersData.forEach((m,i)=>{
+if(m.name.toLowerCase().includes(search)){
+let row=table.insertRow();
+row.className=(m.status==="مدفوع")?"paid":"unpaid";
+row.insertCell(0).innerText=m.name;
+row.insertCell(1).innerText=m.date;
+row.insertCell(2).innerText=m.duration;
+row.insertCell(3).innerText=m.amount;
+row.insertCell(4).innerText=m.status;
+
+let edit=row.insertCell(5);
+let ebtn=document.createElement("button");
+ebtn.innerText="تعديل";
+ebtn.onclick=()=>editMember(i);
+edit.appendChild(ebtn);
+
+let del=row.insertCell(6);
+let dbtn=document.createElement("button");
+dbtn.innerText="حذف";
+dbtn.onclick=()=>{if(confirm("حذف؟")){membersData.splice(i,1);localStorage.setItem(currentMonth+"_subs",JSON.stringify(membersData));renderMembers();populateMonths();}};
+del.appendChild(dbtn);
+
+total+=m.amount; count++;
+(m.status==="مدفوع")?paid++:unpaid++;
+}
+});
+
+document.getElementById("subTotal").innerText=total;
+document.getElementById("subCount").innerText=count;
+document.getElementById("paidCount").innerText=paid;
+document.getElementById("unpaidCount").innerText=unpaid;
+}
+
+function editMember(i){
+let m=membersData[i];
+nameInput.value=m.name;
+startDate.value=m.date;
+durationInput.value=m.duration;
+amountInput.value=m.amount;
+statusSelect.value=m.status;
+membersData.splice(i,1);
+localStorage.setItem(currentMonth+"_subs",JSON.stringify(membersData));
+renderMembers();
+}
+
+function addDaily(){
+let amount=parseFloat(document.getElementById("dailyAmount").value);
+if(!amount){alert("ادخل مبلغ");return;}
+let today=new Date().toLocaleDateString('ar-EG');
+dailyData.push({date:today,amount});
+localStorage.setItem(currentMonth+"_daily",JSON.stringify(dailyData));
+document.getElementById("dailyAmount").value="";
+renderDaily();
+}
+
+function renderDaily(){
+let table=document.getElementById("dailyTable");
+table.innerHTML="";
+let today=new Date().toLocaleDateString('ar-EG');
+let todayTotal=0,monthTotal=0;
+
+dailyData.forEach((d,i)=>{
+let row=table.insertRow();
+row.insertCell(0).innerText=d.date;
+row.insertCell(1).innerText=d.amount;
+
+let del=row.insertCell(2);
+let btn=document.createElement("button");
+btn.innerText="حذف";
+btn.onclick=()=>{dailyData.splice(i,1);localStorage.setItem(currentMonth+"_daily",JSON.stringify(dailyData));renderDaily();};
+del.appendChild(btn);
+
+monthTotal+=d.amount;
+if(d.date===today) todayTotal+=d.amount;
+});
+
+document.getElementById("todayTotal").innerText=todayTotal;
+document.getElementById("monthDailyTotal").innerText=monthTotal;
+}
+
+populateMonths();
+loadMonth(currentMonth);
+</script>
+
+</body>
+</html>
